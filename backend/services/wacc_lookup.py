@@ -15,7 +15,7 @@ def _load_data():
             "data/wacc.xls",
             sheet_name="Industry Averages",
             engine="xlrd",
-            header=19,
+            header=18,
             usecols=range(11),   # skip wacc_local at load time
         )
         _df.columns = COLUMNS

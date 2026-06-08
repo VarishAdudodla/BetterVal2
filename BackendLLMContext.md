@@ -23,7 +23,8 @@ BetterVal2/
 ├── backend/
 │   ├── routers/
 │   │   ├── pdf.py                   # POST /parse-pdf
-│   │   └── assumptions.py           # POST /generate-assumptions
+│   │   ├── assumptions.py           # POST /generate-assumptions
+│   │   └── valuation.py             # POST /value
 │   ├── services/
 │   │   ├── financials_from_pdf.py   # LLM extraction (OpenRouter)
 │   │   ├── pdf_text_extractor.py    # PyMuPDF text extraction
@@ -177,37 +178,77 @@ Router returns: {"assumptions": { ...validated assumptions dict... }}
 
 ---
 
-### Endpoint 3 — `POST /value` *(DCF valuation — to be wired up)*
+### Endpoint 3 — `POST /value`
 
-**Service:** `backend/services/dcf.py`  
-**Input:** `DCFInputs` dataclass
+**Router:** `backend/routers/valuation.py`  
+**Rate limit:** 5/minute  
+**Input:** JSON body (`ValuationRequest`)
 
-The DCF model is implemented but not yet exposed as a router endpoint. It takes a `DCFInputs` dataclass assembled by the frontend (or a future `/value` router) from the outputs of the two endpoints above plus WACC lookup.
-
-**DCFInputs assembly:**
-```python
-from backend.services.wacc_lookup import get_wacc_by_industry
-from backend.models.dcf_inputs import DCFInputs
-
-wacc_row = get_wacc_by_industry(assumptions["industry"])
-
-inputs = DCFInputs(
-    rev_i=parsed["revenue"][0],
-    beg_op_marg=parsed["operatingMargin"][0],
-    tax_r=parsed["taxRate"][0],
-    cash=parsed["cash"],
-    total_debt=parsed["totalDebt"],
-    shares_outstanding=parsed["sharesOutstanding"],
-    sterm_rev_g=assumptions["sterm_rev_g"],
-    lterm_rev_g=assumptions["lterm_rev_g"],
-    ending_op_marg=assumptions["ending_op_marg"],
-    reinvestment_r=assumptions["reinvestment_r"],
-    discount_r=wacc_row["wacc"],
-    term_g=DEFAULT_TERM_G,       # from config
-    riskf_r=DEFAULT_RISKF_R,     # from config
-    num_years=DEFAULT_NUM_YEARS, # from config (10)
-)
+```json
+{
+  "parsed": { ...output of /parse-pdf... },
+  "assumptions": { ...output of /generate-assumptions... }
+}
 ```
+
+**Note:** Both `parsed` and `assumptions` can be forwarded from the upstream endpoints without transformation.
+
+```
+valuation.py (router)
+    │
+    ▼
+get_wacc_by_industry(assumptions.industry)
+    │   KeyError → 422 "Industry not found in WACC dataset"
+    │
+    ▼
+DCFInputs(
+    rev_i=parsed.revenue[0],
+    beg_op_marg=parsed.operatingMargin[0],
+    tax_r=parsed.taxRate[0],
+    cash=parsed.cash,
+    total_debt=parsed.totalDebt,
+    shares_outstanding=parsed.sharesOutstanding,
+    sterm_rev_g=assumptions.sterm_rev_g,
+    lterm_rev_g=assumptions.lterm_rev_g,
+    ending_op_marg=assumptions.ending_op_marg,
+    reinvestment_r=assumptions.reinvestment_r,
+    discount_r=wacc_row["wacc"],
+    term_g=DEFAULT_TERM_G,
+    riskf_r=DEFAULT_RISKF_R,
+    num_years=DEFAULT_NUM_YEARS,
+)
+    │   ValueError (shares_outstanding ≤ 0) → 422
+    │
+    ▼
+DCF(inputs)
+    │   ValueError → 422
+    │   Exception  → 500
+    │
+    ▼
+Router returns: {"enterprise_value": ..., "equity_value": ..., "equity_value_per_share": ...}
+```
+
+**Pydantic models (defined in `valuation.py`):**
+
+`ParsedFinancials` — slim subset of `/parse-pdf` output used by the DCF model:
+
+| Field | Type |
+|---|---|
+| `revenue` | `list[float]` (min 1 item) |
+| `operatingMargin` | `list[float]` (min 1 item) |
+| `taxRate` | `list[float]` (min 1 item) |
+| `cash` | `float` |
+| `totalDebt` | `float` |
+| `sharesOutstanding` | `float` |
+
+Extra fields from `/parse-pdf` (e.g. `revenueGrowth`, `reinvestmentRate`) are silently ignored — the full `parsed` payload can be forwarded as-is.
+
+`ValuationRequest` — top-level request body:
+
+| Field | Type |
+|---|---|
+| `parsed` | `ParsedFinancials` |
+| `assumptions` | `Assumptions` (from `backend/models/assumptions.py`) |
 
 **DCF model logic (`dcf.py`):**
 - Years 1–5 (short-term): revenue growth and operating margin interpolate linearly from starting values to long-term targets via `linear_steps()`
@@ -218,7 +259,7 @@ inputs = DCFInputs(
 - Equity value = EV − total_debt + cash
 - Equity value per share = equity_value / shares_outstanding
 
-**Returns:**
+**Response shape:**
 ```json
 {
   "enterprise_value": 2850000000000,
@@ -323,7 +364,6 @@ All routers follow this exception hierarchy:
 - **Free-tier OpenRouter models** (e.g. `gpt-oss-20b:free`) can silently return empty responses on large prompts. If this happens consistently, switch `OPENROUTER_MODEL` in `financials_from_pdf.py` to `google/gemini-2.0-flash-001`.
 - **`changeInWorkingCapital` is deliberately not extracted from the cash flow statement.** ΔWC is always computed from balance sheet AR/Inventory/AP. Do not add it back to the LLM schema.
 - **Shares outstanding must never have unit expansion applied** (the LLM is explicitly instructed this way). Monetary values use `(in millions)` → ×1,000,000 expansion; shares do not.
-- **The `/value` DCF endpoint does not yet exist as a router.** `dcf.py` has the model; it needs a router and a request model that assembles `DCFInputs` from the parsed + assumptions outputs.
 - **`calculate_fperformance.py` has stale imports** (`from services.financials_from_pdf import extract_raw_financials`, `from services.pdf_text_extractor import extract_all_text`) that are unused after the refactor. The active entry point is `parse_financials_from_pdf` which delegates to `_parse_pdf` (aliased from `financials_from_pdf.parse_financials_from_pdf`).
 - **CORS** is configured via `CORS_ORIGINS` env var (comma-separated). Default: `http://localhost:5173`.
-- **Rate limiting** via `slowapi` uses remote IP. Limits: 5/minute on `/parse-pdf`, 5/minute on `/generate-assumptions`.
+- **Rate limiting** via `slowapi` uses remote IP. Limits: 5/minute on `/parse-pdf`, 5/minute on `/generate-assumptions`, 5/minute on `/value`.
