@@ -1,12 +1,14 @@
 import logging
 import json
-from groq import Groq
-from config import GROQ_API_KEY, GROQ_PARSING_MODEL
+from openai import OpenAI
+from config import OPENROUTER_API_KEY
 from backend.models.parsed_financials import RawFinancialExtraction
 from backend.services.pdf_text_extractor import extract_all_text
 from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
+
+OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
 
 SYSTEM_PROMPT = SYSTEM_PROMPT = """You are a financial data extraction assistant for SEC 10-K and 10-Q filings.
 
@@ -71,7 +73,7 @@ Rules:
 - changeInWorkingCapital: from cash flow statement (changes in operating assets/liabilities).
 - If missing, still populate accountsReceivable, inventory, accountsPayable per period for balance sheet fallback.
 - cashAndCashEquivalents, shortTermDebt, longTermDebt: most recent period only.
-- sharesOutstanding: weighted-average diluted shares from cover/EPS section (basic if diluted unavailable); 0 if not found.
+- sharesOutstanding: weighted-average diluted shares from the EPS section or cover page.
 - For 10-Q Filings: If using "6 Months Ended Figures" multiply the revenue values by two before returning the JSON. 
 - If only quarterly figures are available, use those consistently but note they are quarterly. IF THIS IS THE CASE, MULTIPLY EACH REVENUE VALUE BY 4 BEFORE RETURNING THE OUTPUT. 
 - All numeric values in the JSON must be plain numbers with no commas, currency symbols, 
@@ -128,10 +130,14 @@ def _normalize_arrays(data: dict) -> dict:
     return data
 
 def extract_raw_financials(statement_text: str, cover_text: str) -> dict:
-    if not GROQ_API_KEY:
-        raise ValueError("GROQ_API_KEY is not set")
+    if not OPENROUTER_API_KEY:
+        raise ValueError("OPENROUTER_API_KEY is not set")
 
-    client = Groq(api_key=GROQ_API_KEY)
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
+    )
+
     user_content = USER_PROMPT_TEMPLATE.format(
         statement_text=statement_text,
         cover_text=cover_text or "(no cover text extracted)",
@@ -139,13 +145,13 @@ def extract_raw_financials(statement_text: str, cover_text: str) -> dict:
 
     logger.info("pdf_extraction_llm_request", extra={
         "event": "pdf_extraction_llm_request",
-        "model": GROQ_PARSING_MODEL,
+        "model": OPENROUTER_MODEL,
         "statement_text_chars": len(statement_text),
         "cover_text_chars": len(cover_text) if cover_text else 0,
     })
 
     response = client.chat.completions.create(
-        model=GROQ_PARSING_MODEL,
+        model=OPENROUTER_MODEL,
         temperature=0,
         response_format={"type": "json_object"},
         messages=[
@@ -173,7 +179,7 @@ def extract_raw_financials(statement_text: str, cover_text: str) -> dict:
     if not raw_content:
         logger.error("pdf_extraction_empty_response", extra={
             "event": "pdf_extraction_empty_response",
-            "model": GROQ_PARSING_MODEL,
+            "model": OPENROUTER_MODEL,
         })
         raise ValueError("LLM returned empty response")
 
@@ -222,7 +228,7 @@ def extract_raw_financials(statement_text: str, cover_text: str) -> dict:
 
     logger.info("pdf_extraction_success", extra={
         "event": "pdf_extraction_success",
-        "model": GROQ_PARSING_MODEL,
+        "model": OPENROUTER_MODEL,
         "revenue_periods": len(validated.revenue or []),
         "revenue_most_recent": (validated.revenue or [None])[0],
         "shares_outstanding": validated.sharesOutstanding,
