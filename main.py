@@ -4,6 +4,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.routers import pdf
+from backend.routers import assumptions
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from backend.dependencies.rate_limit import limiter
@@ -50,6 +51,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(pdf.router)
+app.include_router(assumptions.router)
 
 
 @app.get("/health", tags=["meta"])

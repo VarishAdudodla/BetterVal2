@@ -8,7 +8,7 @@ from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 
-OPENROUTER_MODEL = "openai/gpt-oss-120b:free"
+OPENROUTER_MODEL = "openai/gpt-oss-20b:free"
 
 SYSTEM_PROMPT = SYSTEM_PROMPT = """You are a financial data extraction assistant for SEC 10-K and 10-Q filings.
 
