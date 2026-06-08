@@ -6,7 +6,6 @@ class RawFinancialExtraction(BaseModel):
     operatingIncome: list[Optional[float]]
     incomeTaxExpense: list[Optional[float]]
     incomeBeforeTax: list[Optional[float]]
-    changeInWorkingCapital: list[Optional[float]]
     investmentsInPropertyPlantAndEquipment: list[Optional[float]]
     acquisitionsNet: list[Optional[float]]
     depreciationAndAmortization: list[Optional[float]]

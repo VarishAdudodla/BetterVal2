@@ -32,7 +32,7 @@ COVER_KEYWORDS = [
     "diluted",
 ]
 
-COVER_TEXT_MAX_CHARS = 8000
+COVER_TEXT_MAX_CHARS = 4000
 
 def _extract_page(args: tuple) -> tuple[int, str]:
     page, i = args

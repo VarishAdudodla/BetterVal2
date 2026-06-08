@@ -14,7 +14,7 @@ SYSTEM_PROMPT = SYSTEM_PROMPT = """You are a financial data extraction assistant
 
 STATEMENT STRUCTURE — always identify which statement a line item comes from:
 - Income Statement: revenue, operatingIncome, incomeTaxExpense, incomeBeforeTax
-- Cash Flow Statement: changeInWorkingCapital, depreciationAndAmortization, 
+- Cash Flow Statement: depreciationAndAmortization, 
   investmentsInPropertyPlantAndEquipment, acquisitionsNet
 - Balance Sheet: accountsReceivable, inventory, accountsPayable, 
   cashAndCashEquivalents, shortTermDebt, longTermDebt
@@ -32,7 +32,6 @@ CRITICAL - Period Selection Rules:
 
 Extract ONLY raw numeric line items from the provided document text.
 Return ONLY valid JSON matching the requested schema. No markdown, no explanation.
-Everything MUST be in USD
 
 Monetary values (revenue, income, expenses, debt, cash):
 - Expand unit footnotes exactly once: "(in millions)" → multiply by 1,000,000; "(in thousands)" → multiply by 1,000.
@@ -55,7 +54,6 @@ Return JSON with exactly these keys:
   "operatingIncome": [number, ...],
   "incomeTaxExpense": [number, ...],
   "incomeBeforeTax": [number, ...],
-  "changeInWorkingCapital": [number, ...],
   "investmentsInPropertyPlantAndEquipment": [number, ...],
   "acquisitionsNet": [number, ...],
   "depreciationAndAmortization": [number, ...],
@@ -70,14 +68,14 @@ Return JSON with exactly these keys:
 
 Rules:
 - Up to 5 periods, most recent first, all period arrays same length.
-- changeInWorkingCapital: from cash flow statement (changes in operating assets/liabilities).
 - If missing, still populate accountsReceivable, inventory, accountsPayable per period for balance sheet fallback.
 - cashAndCashEquivalents, shortTermDebt, longTermDebt: most recent period only.
 - sharesOutstanding: weighted-average diluted shares from the EPS section or cover page.
 - For 10-Q Filings: If using "6 Months Ended Figures" multiply the revenue values by two before returning the JSON. 
 - If only quarterly figures are available, use those consistently but note they are quarterly. IF THIS IS THE CASE, MULTIPLY EACH REVENUE VALUE BY 4 BEFORE RETURNING THE OUTPUT. 
 - All numeric values in the JSON must be plain numbers with no commas, currency symbols, 
-or formatting (e.g. 416161000000, not 416,161,000,000 and not "$416B").
+or formatting (e.g. 416161000000, not 416,161,000,000 and not "$416B"). INCLUDING SHARES OUTSTANDING
+- Everything MUST be in USD
 
 CRITICAL LINE ITEM DEFINITIONS — read before extracting (General Guidelines, not strict rules):
 - "revenue": ONLY "Net sales", "Net revenue", "Total net revenue", "Total revenues", 
@@ -89,8 +87,6 @@ CRITICAL LINE ITEM DEFINITIONS — read before extracting (General Guidelines, n
   "Earnings before income taxes", or equivalent. Must appear AFTER operating income on the 
   income statement.
 - "incomeTaxExpense": The line labeled "Provision for income taxes" or "Income tax expense".
-- "changeInWorkingCapital": From the CASH FLOW statement only — if it is here it will be under OPERATING ACTIVITIES.
-   NOT from the balance sheet.
 - "investmentsInPropertyPlantAndEquipment": From the CASH FLOW statement only, under the investment section, it could be labeled as
  "Investment in long term assets", "Capital expenditures", or "Investments in Plant Property and Equipment" 
  (it may not be these exactly but close to one of these)
@@ -114,7 +110,7 @@ CRITICAL LINE ITEM DEFINITIONS — read before extracting (General Guidelines, n
 
 ARRAY_FIELDS = [
     "revenue", "operatingIncome", "incomeTaxExpense", "incomeBeforeTax",
-    "changeInWorkingCapital", "investmentsInPropertyPlantAndEquipment",
+    "investmentsInPropertyPlantAndEquipment",
     "acquisitionsNet", "depreciationAndAmortization",
     "accountsReceivable", "inventory", "accountsPayable",
 ]

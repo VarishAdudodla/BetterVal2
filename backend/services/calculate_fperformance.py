@@ -1,6 +1,7 @@
 import logging
 from services.financials_from_pdf import extract_raw_financials
 from services.pdf_text_extractor import extract_all_text
+from services.financials_from_pdf import parse_financials_from_pdf as _parse_pdf
 from utils.financial_helpers import _get_list, _get_optional_list, safe_tax_rate, _resolve_change_in_wc
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,6 @@ def compute_from_raw(raw: dict) -> dict:
     tax_expenses = _get_list(raw, "incomeTaxExpense", n)
     pretax_incomes = _get_list(raw, "incomeBeforeTax", n)
 
-    change_in_wc = _get_optional_list(raw, "changeInWorkingCapital", n)
     capex = _get_optional_list(raw, "investmentsInPropertyPlantAndEquipment", n)
     acquisitions = _get_optional_list(raw, "acquisitionsNet", n)
     depreciation = _get_optional_list(raw, "depreciationAndAmortization", n)
@@ -48,7 +48,7 @@ def compute_from_raw(raw: dict) -> dict:
 
     reinvestment_rates = []
     for i in range(n):
-        wc_change = _resolve_change_in_wc(i, change_in_wc, ar, inv, ap)
+        wc_change = _resolve_change_in_wc(i, ar, inv, ap)
         cap = capex[i] if i < len(capex) and capex[i] is not None else 0.0
         acq = acquisitions[i] if i < len(acquisitions) and acquisitions[i] is not None else 0.0
         dep = depreciation[i] if i < len(depreciation) and depreciation[i] is not None else 0.0
@@ -69,6 +69,5 @@ def compute_from_raw(raw: dict) -> dict:
     }
 
 def parse_financials_from_pdf(file) -> dict:
-    statement_text, cover_text = extract_all_text(file)
-    raw = extract_raw_financials(statement_text, cover_text)
+    raw = _parse_pdf(file)
     return compute_from_raw(raw)

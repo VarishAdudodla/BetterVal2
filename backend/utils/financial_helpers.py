@@ -36,19 +36,17 @@ def _working_capital(ar, inv, ap):
         return None
     return (ar or 0.0) + (inv or 0.0) - (ap or 0.0)
 
-#Change in working capital calculations safely // backup if output failed
-def _resolve_change_in_wc(idx, change_in_wc, ar, inv, ap):
-    if idx < len(change_in_wc) and change_in_wc[idx] is not None:
-        return change_in_wc[idx]
+def _resolve_change_in_wc(idx, ar, inv, ap):
+    """Always compute ΔWC from balance sheet AR/Inv/AP."""
     wc_curr = _working_capital(
-        ar[idx] if idx < len(ar) else None,
-        inv[idx] if idx < len(inv) else None,
-        ap[idx] if idx < len(ap) else None,
+        ar[idx]     if idx     < len(ar)  else None,
+        inv[idx]    if idx     < len(inv) else None,
+        ap[idx]     if idx     < len(ap)  else None,
     )
     wc_prev = _working_capital(
-        ar[idx + 1] if idx + 1 < len(ar) else None,
+        ar[idx + 1] if idx + 1 < len(ar)  else None,
         inv[idx + 1] if idx + 1 < len(inv) else None,
-        ap[idx + 1] if idx + 1 < len(ap) else None,
+        ap[idx + 1] if idx + 1 < len(ap)  else None,
     )
     if wc_curr is None or wc_prev is None:
         return 0.0
