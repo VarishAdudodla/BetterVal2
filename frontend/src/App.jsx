@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import "./App.css";
 
-const API_BASE = "https://betterval2-production.up.railway.appp";
+const API_BASE = "https://betterval2-production.up.railway.app";
 
 function formatCurrency(val, compact = false) {
   if (!val && val !== 0) return "—";
