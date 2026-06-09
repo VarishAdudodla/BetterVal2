@@ -70,6 +70,7 @@ export default function App() {
       formData.append("file", file);
       const res = await fetch(`${API_BASE}/parse-pdf`, { method: "POST", body: formData });
       const data = await res.json();
+      console.log("parsed response:", data.parsed);  // ADD THIS
       if (!res.ok) throw new Error(data.detail || "Failed to parse PDF");
       setParsed(data.parsed);
       setStep(2);
