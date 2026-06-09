@@ -1,0 +1,24 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: #5b6cf8 !important;
+  box-shadow: 0 0 0 3px #5b6cf822;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
